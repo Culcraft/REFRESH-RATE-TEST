@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Refresh Rate Comparison</title>
+  <style>
+    body {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+      background-color: #f0f0f0;
+      flex-direction: column;
+    }
+    canvas {
+      background-color: #fff;
+      border: 2px solid #333;
+    }
+    .controls {
+      margin-top: 20px;
+      text-align: center;
+    }
+    select, input {
+      padding: 10px;
+      font-size: 16px;
+      margin-top: 10px;
+    }
+    #customHzContainer {
+      display: none;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+
+  <canvas id="ballCanvas" width="500" height="500"></canvas>
+
+  <div class="controls">
+    <label for="hzSelector">Choose Refresh Rate:</label>
+    <select id="hzSelector">
+      <option value="60">60Hz</option>
+      <option value="30">30Hz</option>
+      <option value="20">20Hz</option>
+      <option value="10">10Hz</option>
+      <option value="5">5Hz</option>
+      <option value="2">2Hz</option>
+      <option value="0.9">0.9Hz</option>
+      <option value="75">75Hz</option> <!-- Added 75Hz here -->
+      <option value="90">90Hz</option>
+      <option value="120">120Hz</option>
+      <option value="144">144Hz</option>
+      <option value="165">165Hz</option>
+      <option value="240">240Hz</option>
+      <option value="360">360Hz</option>
+    </select>
+    
+    <div id="customHzContainer">
+      <label for="customHzInput">Enter Custom Hz:</label>
+      <input type="number" id="customHzInput" min="1" max="1000" placeholder="e.g. 75">
+    </div>
+
+    <br>
+
+    <label for="shapeSelector">Choose Shape:</label>
+    <select id="shapeSelector">
+      <option value="square">Square</option>
+      <option value="triangle">Triangle</option>
+      <option value="text">Text</option>
+    </select>
+
+    <br>
+
+    <label for="textInput">Enter Text (Leave blank for Lorem Ipsum):</label>
+    <input type="text" id="textInput" placeholder="Enter custom text">
+
+    <br>
+    <label for="speedSelector">Speed (120px/s to 7680px/s):</label>
+    <input type="range" id="speedSelector" min="120" max="7680" value="960" step="1">
+    <span id="speedValue">960</span> px/sec
+  </div>
+
+  <script>
+    const canvas = document.getElementById('ballCanvas');
+    const ctx = canvas.getContext('2d');
+    const hzSelector = document.getElementById('hzSelector');
+    const shapeSelector = document.getElementById('shapeSelector');
+    const textInput = document.getElementById('textInput');
+    const speedSelector = document.getElementById('speedSelector');
+    const speedValueDisplay = document.getElementById('speedValue');
+    const customHzContainer = document.getElementById('customHzContainer');
+    const customHzInput = document.getElementById('customHzInput');
+
+    const object = {
+      x: 50,
+      y: canvas.height / 2,
+      size: 40,
+      dx: 0, // We'll calculate dx based on speed
+      shape: 'square',
+      text: 'Lorem ipsum dolor sit amet' // Default 5 words of Lorem Ipsum
+    };
+
+    let intervalId;
+    let currentHz = 60;
+    let speed = 960;  // Default speed (960px per second)
+    let dx = 0;  // Speed per frame
+
+    // Function to estimate the screen's refresh rate
+    function getScreenRefreshRate() {
+      const start = performance.now();
+      let frameCount = 0;
+
+      return new Promise(resolve => {
+        function trackFrames() {
+          frameCount++;
+          const now = performance.now();
+          if (now - start > 1000) {
+            resolve(frameCount);
+          } else {
+            requestAnimationFrame(trackFrames);
+          }
+        }
+        trackFrames();
+      });
+    }
+
+    // Update the available Hz options based on the detected refresh rate
+    async function setAvailableHzOptions() {
+      const refreshRate = await getScreenRefreshRate();
+      console.log(`Detected screen refresh rate: ${refreshRate}Hz`);
+
+      const options = hzSelector.querySelectorAll('option');
+      options.forEach(option => {
+        const hz = parseFloat(option.value);
+
+        // Disable only options higher than the detected refresh rate, but keep 60Hz always available
+        if (hz > refreshRate && hz !== 60) {
+          option.disabled = true;
+        } else {
+          option.disabled = false;
+        }
+      });
+    }
+
+    // Draw the selected shape or text on the canvas
+    function drawObject() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      if (object.shape === 'square') {
+        ctx.fillStyle = 'blue';
+        ctx.fillRect(object.x - object.size / 2, object.y - object.size / 2, object.size, object.size);
+      } else if (object.shape === 'triangle') {
+        ctx.fillStyle = 'blue';
+        ctx.beginPath();
+        ctx.moveTo(object.x, object.y - object.size / 2); // Top point
+        ctx.lineTo(object.x - object.size / 2, object.y + object.size / 2); // Bottom left
+        ctx.lineTo(object.x + object.size / 2, object.y + object.size / 2); // Bottom right
+        ctx.closePath();
+        ctx.fill();
+      } else if (object.shape === 'text') {
+        ctx.fillStyle = 'black';
+        ctx.font = `${object.size}px Arial`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(object.text, object.x, object.y);
+      }
+    }
+
+    function updateObjectPosition() {
+      // Update object position
+      object.x += dx;
+
+      // When object moves off the right side of the screen, it reappears on the left
+      if (object.x - object.size / 2 > canvas.width) {
+        object.x = -object.size / 2; // Reset object to the left
+      }
+      // When object moves off the left side of the screen, it reappears on the right
+      if (object.x + object.size / 2 < 0) {
+        object.x = canvas.width + object.size / 2; // Reset object to the right
+      }
+
+      drawObject();
+    }
+
+    function startAnimation(hz) {
+      clearInterval(intervalId);
+      const interval = 1000 / hz; // Time between frames (milliseconds)
+      dx = speed * (interval / 1000);  // Calculate how far to move per frame (in pixels)
+      intervalId = setInterval(updateObjectPosition, interval);
+    }
+
+    hzSelector.addEventListener('change', (e) => {
+      currentHz = parseFloat(e.target.value);
+      if (currentHz === 'custom') {
+        customHzContainer.style.display = 'block'; // Show custom Hz input field
+      } else {
+        customHzContainer.style.display = 'none'; // Hide custom Hz input field
+        startAnimation(currentHz);
+      }
+    });
+
+    customHzInput.addEventListener('input', (e) => {
+      const customHz = parseFloat(e.target.value);
+      if (!isNaN(customHz) && customHz > 0) {
+        startAnimation(customHz); // Start animation with custom Hz
+      }
+    });
+
+    shapeSelector.addEventListener('change', (e) => {
+      object.shape = e.target.value; // Update shape
+      if (object.shape === 'text') {
+        object.text = textInput.value || 'Lorem ipsum dolor sit amet'; // Default to 5 words of Lorem Ipsum if no text
+      }
+      startAnimation(currentHz); // Restart animation with new shape
+    });
+
+    textInput.addEventListener('input', (e) => {
+      if (object.shape === 'text') {
+        object.text = e.target.value || 'Lorem ipsum dolor sit amet'; // Update text
+      }
+    });
+
+    speedSelector.addEventListener('input', (e) => {
+      speed = parseInt(e.target.value);
+      speedValueDisplay.textContent = speed; // Update displayed speed
+      startAnimation(currentHz); // Restart animation with the new speed
+    });
+
+    // Initialize with default values
+    setAvailableHzOptions().then(() => {
+      startAnimation(currentHz);
+    });
+  </script>
+
+</body>
+</html>
